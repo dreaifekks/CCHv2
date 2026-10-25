@@ -129,6 +129,38 @@ var chromeLogin = (function() {
 		});
 	}
 
+	// Fill the login form with the handle/password saved in CCHv2 settings and
+	// submit it. Resolves "submitted", or another state when it should be
+	// retried later ("noform", "waiting" for the form's own Turnstile token).
+	function fillLogin(port, creds) {
+		return getJSON("http://127.0.0.1:" + port + "/json/list").then(function(list) {
+			var page = list.find(function(t) {
+				return t.type == "page" && /^https:\/\/codeforces\.com\/enter/.test(t.url);
+			});
+			if (!page) return "noform";
+			var script = "(function(c){" +
+				"var h=document.querySelector('input[name=handleOrEmail]');if(!h)return 'noform';" +
+				"var f=h.form,p=f.querySelector('input[name=password]');" +
+				"var ts=f.querySelector('[name=cf-turnstile-response]');if(ts&&!ts.value)return 'waiting';" +
+				"function set(el,v){el.focus();el.value=v;el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));}" +
+				"set(h,c.u);set(p,c.p);" +
+				"var r=f.querySelector('input[name=remember]');if(r&&!r.checked)r.click();" +
+				"var b=f.querySelector('input[type=submit],button[type=submit]');if(b)b.click();else f.submit();" +
+				"return 'submitted';})(" + JSON.stringify({
+					u: creds.handle,
+					p: creds.password
+				}) + ")";
+			return cdpCall(page.webSocketDebuggerUrl, "Runtime.evaluate", {
+				expression: script,
+				returnByValue: true
+			}).then(function(r) {
+				return r.result && r.result.value;
+			});
+		}).catch(function() {
+			return "noform";
+		});
+	}
+
 	function copyCookies(port) {
 		return getJSON("http://127.0.0.1:" + port + "/json/version").then(function(v) {
 			return cdpCall(v.webSocketDebuggerUrl, "Storage.getCookies", {});
@@ -172,7 +204,9 @@ var chromeLogin = (function() {
 	}
 
 	// done(err) is called once: err == null when cookies were copied.
-	function start(loginUrl, done) {
+	// creds ({handle, password}) are optional; without them the user types
+	// them in the browser window.
+	function start(loginUrl, creds, done) {
 		var bin = findBrowser();
 		if (!bin) return done(new Error("no Chrome-family browser found"));
 		var profile = path.join(path.dirname(nw.App.dataPath), "chrome-login-profile");
@@ -203,7 +237,11 @@ var chromeLogin = (function() {
 			child.unref();
 			var started = Date.now(),
 				reachable = false,
-				reopened = false;
+				reopened = false,
+				// submit saved credentials at most once, so a wrong password
+				// cannot turn into repeated login attempts
+				filled = !(creds && creds.handle && creds.password),
+				filling = false;
 
 			function poll() {
 				if (finished) return;
@@ -217,6 +255,13 @@ var chromeLogin = (function() {
 						if (!reopened) reopenLoginPage(port, loginUrl).then(function(done) {
 							reopened = done;
 						});
+						if (!filled && !filling) {
+							filling = true;
+							fillLogin(port, creds).then(function(state) {
+								filling = false;
+								if (state == "submitted") filled = true;
+							});
+						}
 						return setTimeout(poll, POLL_MS);
 					}
 					return copyCookies(port).then(function() {

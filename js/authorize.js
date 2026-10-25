@@ -212,7 +212,10 @@ function submitLoginByWindow() {
 // a real Chrome-family browser when one is installed.
 function submitLoginByChrome() {
 	$(".settingsLoginButton").html(`<span info='loginLoading'>${languageOption.general.loginLoading}</span>`);
-	chromeLogin.start(settings.mainURL + '/enter?back=%2F', function(err) {
+	chromeLogin.start(settings.mainURL + '/enter?back=%2F', {
+		handle: $("[for=accountHandleOrEmail] > .settingsInputPart > input").val(),
+		password: $("[for=accountPassword] > .settingsInputPart > input").val()
+	}, function(err) {
 		loadLoginType();
 		var info = err ? 'errorLoginFailed' : 'loginSuccess';
 		if (err) console.log("Chrome login:", err.message);
