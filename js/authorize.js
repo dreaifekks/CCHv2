@@ -163,7 +163,56 @@ function submitLogout(cb) {
 	})
 }
 
+// Codeforces now puts /enter behind a Cloudflare challenge, so a scripted
+// POST cannot log in. Open the real login page instead; it shares cookies
+// with the app, so the session is visible to every later request.
+function submitLoginByWindow() {
+	$(".settingsLoginButton").html(`<span info='loginLoading'>${languageOption.general.loginLoading}</span>`);
+	var done = false;
+
+	function restoreButton(info) {
+		$(".settingsLoginButton").html(`<span info='${info}'>${localize(info)}</span>`);
+		setTimeout(function() {
+			$(".settingsLoginButton").html(`<span info='settingsLoginButton' onclick="submitLogin()">${languageOption.general.settingsLoginButton}</span>`);
+		}, 2000);
+	}
+
+	nw.Window.open(settings.mainURL + '/enter?back=%2F', {
+		"title": "Codeforces Login",
+		"width": 900,
+		"height": 720,
+		"position": "center",
+		"resizable": true,
+		"show": true
+	}, function(w) {
+		w.on("loaded", function() {
+			$.ajax({
+				url: settings.mainURL + '?locale=en',
+				success: function(data) {
+					if (done) return;
+					var q = $(data).find(".lang-chooser > div").eq(1);
+					if (q.children("a").eq(1).html() != "Logout") return;
+					done = true;
+					w.close(true);
+					loadLoginType();
+					restoreButton('loginSuccess');
+				}
+			});
+		});
+		w.on("closed", function() {
+			if (done) return;
+			done = true;
+			loadLoginType();
+			restoreButton('settingsLoginButton');
+		});
+	});
+}
+
 function submitLogin() {
+	if (RunInNwjs) {
+		submitLoginByWindow();
+		return;
+	}
 	$(".settingsLoginButton").html(`<span info='loginLoading'>${languageOption.general.loginLoading}</span>`);
 	submitLogout(function() {
 		$.ajax({
