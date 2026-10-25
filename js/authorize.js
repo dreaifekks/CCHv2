@@ -208,7 +208,26 @@ function submitLoginByWindow() {
 	});
 }
 
+// Turnstile on /enter never passes inside NW.js; prefer logging in through
+// a real Chrome-family browser when one is installed.
+function submitLoginByChrome() {
+	$(".settingsLoginButton").html(`<span info='loginLoading'>${languageOption.general.loginLoading}</span>`);
+	chromeLogin.start(settings.mainURL + '/enter?back=%2F', function(err) {
+		loadLoginType();
+		var info = err ? 'errorLoginFailed' : 'loginSuccess';
+		if (err) console.log("Chrome login:", err.message);
+		$(".settingsLoginButton").html(`<span info='${info}'>${localize(info)}</span>`);
+		setTimeout(function() {
+			$(".settingsLoginButton").html(`<span info='settingsLoginButton' onclick="submitLogin()">${languageOption.general.settingsLoginButton}</span>`);
+		}, 2000);
+	});
+}
+
 function submitLogin() {
+	if (RunInNwjs && typeof chromeLogin != "undefined" && chromeLogin.available()) {
+		submitLoginByChrome();
+		return;
+	}
 	if (RunInNwjs) {
 		submitLoginByWindow();
 		return;
