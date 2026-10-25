@@ -10,6 +10,14 @@
 // it downloads the anonymous standings once, filters rows locally, and, when
 // unofficial rows for given handles are requested (virtual / out of
 // competition), rebuilds them from contest.status submissions.
+//
+// Known limits:
+// - Official CONTESTANT rows keep their official rank even when unofficial
+//   rows are asked for, and rebuilt rows are ranked against official rows
+//   only, so the "unofficial" rank is an approximation.
+// - showUnofficial without handles returns official rows only (no practice
+//   or virtual rows of other users).
+// - At most MAX_UNOFFICIAL_HANDLES handles get rebuilt unofficial rows.
 
 (function(root) {
 	var CACHE_TTL = 3000;
@@ -59,20 +67,47 @@
 		});
 	}
 
+	// Reject when `signal` aborts, without cancelling the shared download.
+	function withSignal(p, signal) {
+		if (!signal) return p;
+		return new Promise(function(resolve, reject) {
+			if (signal.aborted) return reject(new Error("aborted"));
+			signal.addEventListener("abort", function() {
+				reject(new Error("aborted"));
+			});
+			p.then(resolve, reject);
+		});
+	}
+
+	// One download per contest is shared by concurrent callers and reused for
+	// CACHE_TTL after it finishes.
 	function getAnonymousStandings(base, contestId, signal) {
 		var key = base + "#" + contestId;
-		var c = standingsCache[key];
 		var now = Date.now();
-		if (c && now - c.time < CACHE_TTL) return c.promise;
-		var p = getJSON(base + "/contest.standings?contestId=" + contestId, signal);
-		standingsCache[key] = {
-			time: now,
-			promise: p
-		};
-		p.catch(function() {
-			if (standingsCache[key] && standingsCache[key].promise === p) delete standingsCache[key];
+		Object.keys(standingsCache).forEach(function(k) {
+			var c = standingsCache[k];
+			if (c.done != undefined && now - c.done >= CACHE_TTL) delete standingsCache[k];
 		});
-		return p;
+		if (!standingsCache[key]) {
+			var entry = {
+				done: undefined
+			};
+			entry.promise = getJSON(base + "/contest.standings?contestId=" + contestId).then(function(r) {
+				entry.done = Date.now();
+				return r;
+			}, function(e) {
+				if (standingsCache[key] === entry) delete standingsCache[key];
+				throw e;
+			});
+			standingsCache[key] = entry;
+		}
+		return withSignal(standingsCache[key].promise, signal);
+	}
+
+	function sleep(ms) {
+		return new Promise(function(r) {
+			setTimeout(r, ms);
+		});
 	}
 
 	function handleSet(str) {
@@ -250,19 +285,35 @@
 			var extra = Promise.resolve([]);
 			if (hs && showUnofficial) {
 				var types = ["VIRTUAL", "OUT_OF_COMPETITION"];
-				// one contest.status call per handle; capped to stay within the API call limit
-				extra = Promise.all(Object.keys(hs).slice(0, MAX_UNOFFICIAL_HANDLES).map(function(h) {
-					return getJSON(base + "/contest.status?contestId=" + cid + "&handle=" + encodeURIComponent(h), signal).then(function(r) {
-						return r.json && r.json.status == "OK" ? r.json.result : [];
-					}, function() {
-						return [];
+				// one contest.status call per handle, spaced out for the API call
+				// limit; a failed call fails the whole request so callers retry
+				var handles = Object.keys(hs).slice(0, MAX_UNOFFICIAL_HANDLES);
+				var subs = [],
+					seen = {},
+					failed = null;
+				extra = handles.reduce(function(chain, h, i) {
+					return chain.then(function() {
+						if (failed) return;
+						return (i ? sleep(300) : Promise.resolve()).then(function() {
+							return getJSON(base + "/contest.status?contestId=" + cid + "&handle=" + encodeURIComponent(h), signal);
+						}).then(function(r) {
+							if (!r.json || r.json.status != "OK") {
+								failed = r;
+								return;
+							}
+							r.json.result.forEach(function(s) {
+								if (seen[s.id]) return;
+								seen[s.id] = true;
+								subs.push(s);
+							});
+						});
 					});
-				})).then(function(lists) {
-					var subs = [].concat.apply([], lists);
-					return synthesizeRows(src, subs, types);
+				}, Promise.resolve()).then(function() {
+					return failed ? failed : synthesizeRows(src, subs, types);
 				});
 			}
 			return extra.then(function(rows) {
+				if (!Array.isArray(rows)) return rows;
 				result.rows = result.rows.concat(rows);
 				result.rows.sort(function(a, b) {
 					return a.rank - b.rank;
@@ -276,8 +327,7 @@
 				};
 				return {
 					status: 200,
-					json: j,
-					text: JSON.stringify(j)
+					json: j
 				};
 			});
 		});
@@ -366,10 +416,11 @@
 					}, options.timeout) : null;
 					serveStandings(options.url, ctrl.signal).then(function(res) {
 						if (timer) clearTimeout(timer);
-						complete(res.status, res.status == 200 ? "success" : "error", {
-							json: res.json,
-							text: res.text
-						}, "Content-Type: application/json");
+						var responses = {};
+						// without parsed JSON, let jQuery's text->json converter report a parsererror
+						if (res.json) responses.json = res.json;
+						if (res.text != undefined) responses.text = res.text;
+						complete(res.status, res.status == 200 ? "success" : "error", responses, "Content-Type: application/json");
 					}, function(e) {
 						if (timer) clearTimeout(timer);
 						if (ctrl.signal.aborted && options.timeout > 0) complete(0, "timeout");

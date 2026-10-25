@@ -99,7 +99,11 @@ function addWatcher(id, idx, gc, handle) {
 		// startWS();
 		// The submission page is behind a Cloudflare challenge now; read the
 		// verdict from the API instead.
+		var polls = 0;
+
 		function reloadByAjax() {
+			// give up after about 10 minutes, or when nobody is logged in
+			if (!handle || ++polls > 300) return;
 			console.log("Reloading by api...");
 			$.ajax({
 				url: settings.codeforcesApiUrl + "/contest.status?contestId=" + getProblemIndexes(idx)[0] + "&handle=" + encodeURIComponent(handle) + "&from=1&count=30",

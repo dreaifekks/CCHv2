@@ -204,7 +204,7 @@ function loadProblem(x, info) {
 	problemCurrentPageList[p][1] = $.ajax({
 		url: settings.mainURL + `/${getProblemIndexes(x)[0] >= 100000 ? "gym" : "contest"}/` + getProblemIndexes(x)[0] + '/problem/' + getProblemIndexes(x)[1] + '?locale=en',
 		success: function(data) {
-			if (data.indexOf(`href="/${getProblemIndexes(x)[0] >= 100000 ? "gym" : "contest"}/${getProblemIndexes(x)[0]}"`) == -1 || data.indexOf(`class="problem-statement"`) == -1) {
+			if (data.indexOf(`href="/${getProblemIndexes(x)[0] >= 100000 ? "gym" : "contest"}/${getProblemIndexes(x)[0]}"`) == -1) {
 				if (problemCurrentPageList.find(function(q) {
 						return q[0] == x
 					}) == undefined) return;

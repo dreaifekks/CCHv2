@@ -27,7 +27,10 @@ if [ ! -f "$CACHE/$ZIP" ]; then
 	curl -fL --retry 3 -o "$CACHE/$ZIP.part" "https://dl.nwjs.io/$NW_VERSION/$ZIP"
 	mv "$CACHE/$ZIP.part" "$CACHE/$ZIP"
 fi
-curl -fsSL "https://dl.nwjs.io/$NW_VERSION/SHASUMS256.txt" | grep " $ZIP\$" > "$CACHE/$ZIP.sha256"
+if [ ! -s "$CACHE/$ZIP.sha256" ]; then
+	curl -fsSL "https://dl.nwjs.io/$NW_VERSION/SHASUMS256.txt" | grep " $ZIP\$" > "$CACHE/$ZIP.sha256.part"
+	mv "$CACHE/$ZIP.sha256.part" "$CACHE/$ZIP.sha256"
+fi
 (cd "$CACHE" && shasum -a 256 -c "$ZIP.sha256")
 
 rm -rf "$CACHE/$NAME" "$APP"
