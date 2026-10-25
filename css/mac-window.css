@@ -1,0 +1,85 @@
+/* macOS look for the custom title bar: traffic lights on the left, centered title. */
+html.macos .ToolList > div:last-child,
+html.macos #ToolList > div:last-child {
+	left: 12px !important;
+	right: auto !important;
+	height: 30px;
+	align-items: center;
+	gap: 8px;
+}
+
+html.macos .ToolListButton {
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
+	box-sizing: border-box;
+	border: 0.5px solid rgba(0, 0, 0, 0.18);
+	transition: none;
+	position: relative;
+}
+
+html.macos .ToolListButton > i {
+	display: none;
+}
+
+html.macos .ToolListClose,
+html.macos .ToolListClose:hover {
+	order: 1;
+	background: #ff5f57;
+}
+
+html.macos .ToolListMinimize,
+html.macos .ToolListMinimize:hover {
+	order: 2;
+	background: #febc2e;
+}
+
+html.macos .ToolListMaximize,
+html.macos .ToolListMaximize:hover {
+	order: 3;
+	background: #28c840;
+}
+
+/* the main window cannot be resized: show a disabled third light */
+html.macos .ToolList > div:last-child::after {
+	content: "";
+	order: 3;
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
+	background: rgba(128, 128, 128, 0.35);
+}
+
+html.macos .ToolListButton::after {
+	position: absolute;
+	inset: 0;
+	display: grid;
+	place-items: center;
+	font: 600 10px/12px -apple-system, "Helvetica Neue", sans-serif;
+	color: rgba(0, 0, 0, 0.55);
+	visibility: hidden;
+}
+
+html.macos .ToolListClose::after {
+	content: "\00d7";
+}
+
+html.macos .ToolListMinimize::after {
+	content: "\2212";
+}
+
+html.macos .ToolListMaximize::after {
+	content: "+";
+}
+
+html.macos .ToolList > div:last-child:hover .ToolListButton::after,
+html.macos #ToolList > div:last-child:hover .ToolListButton::after {
+	visibility: visible;
+}
+
+html.macos .ToolListTitle,
+html.macos #ToolListTitle {
+	text-align: center;
+	margin: 8px 90px;
+	user-select: none;
+}
