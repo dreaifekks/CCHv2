@@ -755,7 +755,7 @@ function initProblemNewWin() {
 					problemNewWinJQ.find(".submitWindow").css("display", "none");
 				}, 500);
 				if (id != undefined)
-					problemNewWinJQ.append(`<script>addWatcher('${id}', '${cid}', '${gc}')</script>`)
+					problemNewWinJQ.append(`<script>addWatcher('${id}', '${cid}', '${gc}', '${currentLoginHandle}')</script>`)
 			}, 1000);
 		}, function(x, y) {
 			tmpButton.removeClass("primaryColor").addClass("dangerColor");

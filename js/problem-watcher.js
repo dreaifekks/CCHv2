@@ -1,4 +1,4 @@
-function addWatcher(id, idx, gc) {
+function addWatcher(id, idx, gc, handle) {
 	var p = $(`<div class="singleWatchContent"><div class="singleWatchTitle">#${id} | ${idx}</div><div style="flex: 1; display: flex; flex-direction: row;"><div style="flex: 1; overflow: hidden; display: grid; place-items: center"><span class="singleWatchInfo">Pending...</span></div></div></div>`)
 	p.css("transform", "scale(1, 0)");
 	p.css("max-height", "0px");
@@ -97,47 +97,55 @@ function addWatcher(id, idx, gc) {
 			};
 		}
 		// startWS();
+		// The submission page is behind a Cloudflare challenge now; read the
+		// verdict from the API instead.
 		function reloadByAjax() {
-			console.log("Reloading by ajax...");
+			console.log("Reloading by api...");
 			$.ajax({
-				url: settings.mainURL + `/${getProblemIndexes(idx)[0] >= 100000 ? "gym" : "contest"}/` + getProblemIndexes(idx)[0] + '/submission/' + id,
-				success: function(data) {
-					if (data.indexOf(`data-entityId="${id}"`) == -1) {
-						setTimeout(reloadByAjax, 10000);
-						return;
-					}
+				url: settings.codeforcesApiUrl + "/contest.status?contestId=" + getProblemIndexes(idx)[0] + "&handle=" + encodeURIComponent(handle) + "&from=1&count=30",
+				success: function(json) {
 					if (wsGetResult)
 						return;
-					var ctL = $(data).find("table").eq(0).find("tr").eq(1);
-					if (ctL.children().eq(4).children().eq(0).hasClass("verdict-accepted")) {
-						p.find(".singleWatchInfo").addClass("green").css("font-weight", "bold");
+					var s = json.status == "OK" ? json.result.find(function(x) {
+						return String(x.id) == String(id);
+					}) : undefined;
+					if (s == undefined) {
+						setTimeout(reloadByAjax, 3000);
+						return;
 					}
-					if (ctL.children().eq(4).children().eq(0).hasClass("verdict-rejected") ||
-						ctL.children().eq(4).children().eq(0).hasClass("verdict-failed")) {
-						p.find(".singleWatchInfo").addClass("red");
-					}
-					p.find(".singleWatchInfo").html(ctL.children().eq(4).text());
-					if (ctL.children().eq(4).text() != lastJudgement)
-						fadeIn(), fadeOut(ctL.children().eq(4).text());
-					lastJudgement = ctL.children().eq(4).text();
-					if (ctL.children().eq(4).children().eq(0).hasClass("verdict-waiting") ||
-						lastJudgement == "In queue" || lastJudgement == "") {
+					var v = s.verdict;
+					var vdl;
+					if (v == undefined || v == "TESTING")
+						vdl = `<span>${toDetailedInfo(v, s.testset)}${v == "TESTING" ? ` on test ${s.passedTestCount + 1}` : ""}</span>`;
+					else if (v == "OK")
+						vdl = `<span class="green" style="font-weight: bold">${toDetailedInfo(v, s.testset)}</span>`;
+					else if (v == "PARTIAL" || v == "COMPILATION_ERROR" || v == "SKIPPED" || v == "REJECTED")
+						vdl = `<span class="red">${toDetailedInfo(v, s.testset)}</span>`;
+					else if (v == "CHALLENGED")
+						vdl = `<span class="red" style="font-weight: bold">${toDetailedInfo(v, s.testset)}</span>`;
+					else
+						vdl = `<span class="red">${toDetailedInfo(v, s.testset)} on test ${s.passedTestCount + 1}</span>`;
+					p.find(".singleWatchInfo").html(vdl);
+					if (vdl != lastJudgement)
+						fadeIn(), fadeOut(vdl);
+					lastJudgement = vdl;
+					if (v == undefined || v == "TESTING") {
 						setTimeout(reloadByAjax, 2000);
-						// if(wsOpened)
-						// 	return;
-					} else {
-						wsGetResult = true;
-						p.find(".singleWatchTitle").html(`${idx} <i class="fas fa-angle-double-right"></i> ${ctL.children().eq(5).text().trim()} | ${ctL.children().eq(6).text().trim()}`);
-						if (settings.openNotification) {
-							new Notification(`Result of CF${idx}`, {
-								body: `${ctL.children().eq(4).text().trim()}\n${ctL.children().eq(5).text().trim()} | ${ctL.children().eq(6).text().trim()}`,
-								icon: '../favicon.png'
-							});
-						}
+						return;
+					}
+					wsGetResult = true;
+					var tim = s.timeConsumedMillis + "ms",
+						mem = toMemoryInfo(s.memoryConsumedBytes);
+					p.find(".singleWatchTitle").html(`${idx} <i class="fas fa-angle-double-right"></i> ${tim} | ${mem}`);
+					if (settings.openNotification) {
+						new Notification(`Result of CF${idx}`, {
+							body: `${$(vdl).text()}\n${tim} | ${mem}`,
+							icon: '../favicon.png'
+						});
 					}
 				},
 				error: function() {
-					setTimeout(reloadByAjax, 2000);
+					setTimeout(reloadByAjax, 3000);
 				}
 			})
 		}
