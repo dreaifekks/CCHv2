@@ -30,9 +30,17 @@ function openSubmission(c, u) {
 					data = $("<body></body>");
 				setTimeout(callback, 100);
 			},
-			error: function() {
+			error: function(jqXHR) {
 				submissionAjax = null;
 				if (T.getTime() != submissionLastOperated.getTime()) return;
+				if (window.cfCompat && cfCompat.isChallenge(jqXHR)) {
+					cfCompat.openChallengeWindow(settings.mainURL + `/${c >= 100000 ? "gym" : "contest"}/` + c + '/submission/' + u, function(passed) {
+						if (T.getTime() != submissionLastOperated.getTime()) return;
+						if (passed) loader(callback);
+						else $(".submissionCloser").click();
+					});
+					return;
+				}
 				$(".submissionContainer > div:first-child > i").css("opacity", 0);
 				setTimeout(function() {
 					$(".submissionContainer > div:first-child > i").attr("class", 'fas fa-unlink');
