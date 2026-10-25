@@ -347,54 +347,8 @@
 		return typeof t == "string" && /<title>Just a moment|challenge-platform\/h\/[a-z]\/orchestrate|cf_chl_opt/.test(t) && jqXHR.status == 403;
 	}
 
-	// Let the user pass a Cloudflare challenge in a real window. The window
-	// shares cookies with the app, so the clearance applies to later requests.
-	var challengeWindow = null,
-		challengeCallbacks = [];
-
-	function openChallengeWindow(url, done) {
-		challengeCallbacks.push(done);
-		if (challengeWindow) return;
-		challengeWindow = true;
-		var finished = false;
-
-		function finish(passed) {
-			if (finished) return;
-			finished = true;
-			challengeWindow = null;
-			var cbs = challengeCallbacks;
-			challengeCallbacks = [];
-			cbs.forEach(function(cb) {
-				cb(passed);
-			});
-		}
-		nw.Window.open(url, {
-			"title": "Codeforces",
-			"width": 900,
-			"height": 720,
-			"position": "center",
-			"resizable": true,
-			"show": true
-		}, function(w) {
-			challengeWindow = w;
-			w.on("loaded", function() {
-				fetch(url, {
-					credentials: "include"
-				}).then(function(r) {
-					if (r.status == 403) return;
-					finish(true);
-					w.close(true);
-				}, function() {});
-			});
-			w.on("closed", function() {
-				finish(false);
-			});
-		});
-	}
-
 	root.cfCompat = {
 		isChallenge: isChallenge,
-		openChallengeWindow: openChallengeWindow,
 		parseQuery: parseQuery,
 		synthesizeRows: synthesizeRows,
 		inferDecay: inferDecay,

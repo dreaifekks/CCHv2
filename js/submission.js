@@ -17,7 +17,6 @@ function openSubmission(c, u) {
 	$(".submissionContainer > div:first-child > i").attr("class", 'fas fa-spin fa-sync-alt');
 	var data, P;
 	var submissionAjax;
-	var challengeShown = false;
 
 	function loader(callback) {
 		submissionAjax = $.ajax({
@@ -34,13 +33,11 @@ function openSubmission(c, u) {
 			error: function(jqXHR) {
 				submissionAjax = null;
 				if (T.getTime() != submissionLastOperated.getTime()) return;
-				if (window.cfCompat && cfCompat.isChallenge(jqXHR) && !challengeShown) {
-					challengeShown = true;
-					cfCompat.openChallengeWindow(settings.mainURL + `/${c >= 100000 ? "gym" : "contest"}/` + c + '/submission/' + u, function(passed) {
-						if (T.getTime() != submissionLastOperated.getTime()) return;
-						if (passed) loader(callback);
-						else $(".submissionCloser").click();
-					});
+				// Cloudflare challenges never pass inside NW.js: show the
+				// submission in the system browser instead.
+				if (window.cfCompat && cfCompat.isChallenge(jqXHR)) {
+					nw.Shell.openExternal(settings.mainURL + `/${c >= 100000 ? "gym" : "contest"}/` + c + '/submission/' + u);
+					$(".submissionCloser").click();
 					return;
 				}
 				$(".submissionContainer > div:first-child > i").css("opacity", 0);
